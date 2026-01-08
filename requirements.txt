@@ -11,8 +11,9 @@ langchain-ollama==0.2.0
 langchain-community==0.3.0
 openai==1.50.0
 
-# Vector Database
-chromadb==0.5.3
+# Vector Database - Using FAISS instead of ChromaDB (easier to install on macOS)
+faiss-cpu==1.8.0
+langchain-chroma==0.1.4
 
 # Search Tool
 tavily-python==0.5.0

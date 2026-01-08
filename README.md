@@ -10,16 +10,6 @@ StratAI is an AI-powered application that helps businesses analyze their operati
 - **Strategic Analysis**: Generating actionable insights with verifiable citations
 - **Predictive Analytics**: Forecasting trends from historical data (optional)
 
-## 🏗️ Architecture
-
-- **Frontend**: Streamlit (Interactive UI)
-- **Backend**: FastAPI (REST API)
-- **Orchestration**: LangChain
-- **Vector DB**: ChromaDB (Local persistence)
-- **LLM**: OpenAI GPT-4o
-- **Search**: Tavily API
-- **Deployment**: Docker
-
 ## 📋 Prerequisites
 
 - Python 3.10+
