@@ -23,7 +23,6 @@ StratAI is an AI-powered application that helps businesses analyze their operati
 ## 📋 Prerequisites
 
 - Python 3.10+
-- OpenAI API Key
 - Tavily API Key
 - Docker & Docker Compose (for containerized deployment)
 
@@ -115,24 +114,6 @@ project/
 - External market search (Tavily)
 - Context merging and analysis
 
-### 3. Strategic Analysis
-- Professional business insights
-- SWOT analysis
-- Source citations
-- Actionable recommendations
-
-### 4. Predictive Analytics (Optional)
-- Sales forecasting (3-month prediction)
-- Linear regression on historical data
-- Integration with LLM narratives
-
-## 🎨 UI Features
-
-- **Sidebar**: File upload, status indicators, model settings
-- **Chat Interface**: Ask strategic questions, get AI responses
-- **Data Visualization**: Charts for sales data and predictions
-- **References**: View source citations and document chunks
-
 ## 📝 Example Queries
 
 - "What are our company's main strengths based on the annual report?"
@@ -140,18 +121,3 @@ project/
 - "What are the current trends in AI technology?"
 - "Predict our sales for the next quarter"
 
-## 🔒 Environment Variables
-
-See `.env.example` for all required configuration variables.
-
-## 📚 Documentation
-
-For detailed implementation details, see the [Implementation Plan](/.gemini/antigravity/brain/cd54eef4-dc2c-4565-8e2e-2ff30b2338c0/implementation_plan.md).
-
-## 🤝 Contributing
-
-This is a capstone project for an AI Bootcamp.
-
-## 📄 License
-
-MIT License
