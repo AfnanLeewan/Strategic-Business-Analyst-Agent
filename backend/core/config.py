@@ -12,11 +12,15 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # LLM Provider Configuration
-    llm_provider: str = Field(default="ollama", env="LLM_PROVIDER")  # "openai" or "ollama"
+    llm_provider: str = Field(default="ollama", env="LLM_PROVIDER")  # "openai", "gemini", or "ollama"
     
-    # OpenAI Configuration (optional now)
+    # OpenAI Configuration (optional)
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o", env="OPENAI_MODEL")
+    
+    # Google Gemini Configuration (optional)
+    gemini_api_key: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-2.0-flash-exp", env="GEMINI_MODEL")
     
     # Ollama Configuration
     ollama_base_url: str = Field(default="http://localhost:11434", env="OLLAMA_BASE_URL")
