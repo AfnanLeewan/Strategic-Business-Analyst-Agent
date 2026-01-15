@@ -1,6 +1,7 @@
 """
 RAG Chain and Strategic Analysis Service.
 Implements hybrid RAG with internal retrieval and external search.
+Updated to handle optional Tavily API key.
 """
 
 import logging
@@ -50,11 +51,30 @@ class RAGEngine:
             )
             logger.info(f"Using OpenAI LLM: {settings.openai_model}")
         
-        # Initialize Tavily search tool
-        self.search_tool = TavilySearchResults(
-            api_key=settings.tavily_api_key,
-            max_results=5
-        )
+        # Initialize Tavily search tool (optional - only if API key provided)
+        # Use os.getenv as fallback since pydantic-settings might not load .env in subprocess
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()  # Explicitly load .env file
+        
+        tavily_key = os.getenv('TAVILY_API_KEY') or settings.tavily_api_key
+        logger.info(f"Tavily API key present: {bool(tavily_key)}")
+        if tavily_key:
+            logger.info(f"Tavily API key value: {tavily_key[:10]}...")
+        
+        if tavily_key:
+            try:
+                self.search_tool = TavilySearchResults(
+                    api_key=tavily_key,
+                    max_results=5
+                )
+                logger.info("Tavily search tool initialized for external market intelligence")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Tavily search tool: {e}")
+                self.search_tool = None
+        else:
+            self.search_tool = None
+            logger.warning("Tavily API key not provided - external market search disabled")
         
         # Strategic analysis prompt
         self.analysis_prompt = self._create_analysis_prompt()
@@ -63,54 +83,82 @@ class RAGEngine:
         """Create the strategic analysis prompt template."""
         system_template = """You are StratAI, a senior business strategist and data analyst.
 
-Your mission is to provide clear, data-driven strategic insights that executives can act on immediately.
+Your mission is to provide ACCURATE, data-driven strategic insights based ONLY on the information provided.
+
+⚠️ CRITICAL ANTI-HALLUCINATION RULES (MUST FOLLOW):
+
+1. **ONLY USE PROVIDED DATA** 🚨
+   - Use ONLY the numbers and facts from the Context Information below
+   - NEVER make up statistics, percentages, or comparisons
+   - If you don't see a specific number in the context, say "Data not available"
+   - DO NOT calculate growth rates unless you have BOTH current AND historical data
+
+2. **NO FABRICATED COMPARISONS** 🚫
+   - NEVER compare to previous periods (last year, last quarter) unless that data is explicitly provided
+   - NEVER claim "growth of X%" without historical baseline data
+   - NEVER say "increased/decreased by Y%" without comparison data
+   - Instead say: "Current period shows [actual numbers from data]"
+
+3. **EXACT NUMBER CITATION** 📊
+   - Report the EXACT numbers from the context
+   - If context shows "Sales: 2,595,000", report "2.595M" or "$2,595,000" - NOT "2.1M"
+   - Round only for readability, but stay within 5% of actual values
+   - When aggregating, show your calculation
+
+4. **VERIFY BEFORE CLAIMING** ✓
+   - Top seller: Check ALL products before claiming which is #1
+   - Regional ranking: Compare ALL regions before declaring winners/losers
+   - Category totals: Sum the actual numbers provided
+   - Trends: Only describe trends if you have time-series data points
+
+5. **STATE LIMITATIONS EXPLICITLY** ⚠️
+   - If no historical data: "Note: Growth comparison not available - only current period data provided"
+   - If incomplete data: "Based on available data for [time period]"
+   - If uncertain: "Data suggests... but further validation recommended"
 
 ANALYSIS FRAMEWORK:
 
-1. **Start with Key Metrics** 📊
-   - Always highlight important numbers first
-   - Use clear formatting: "Revenue: $X", "Growth: +Y%"
-   - Compare current vs historical vs forecast
+**Structured Response Format**:
+```
+## Executive Summary
+[2-3 sentences with key findings - ONLY from provided data]
 
-2. **Structured Response Format**:
-   ```
-   ## Executive Summary
-   [2-3 sentences with key findings]
-   
-   ## Key Metrics
-   - Metric 1: [Number] ([Change])
-   - Metric 2: [Number] ([Change])
-   
-   ## Analysis
-   [Detailed insights with evidence]
-   
-   ## Strategic Insights (SWOT when applicable)
-   ✅ Strengths: ...
-   🎯 Opportunities: ...
-   ⚠️ Risks/Weaknesses: ...
-   
-   ## Actionable Recommendations
-   1. [Specific action] - [Expected outcome]
-   2. [Specific action] - [Expected outcome]
-   ```
+## Key Metrics (from Source Data)
+- Total Revenue: $X (exact from context)
+- By Category: [List with exact numbers]
+- By Region: [List with exact numbers]
+- Top Products: [List with exact numbers]
 
-3. **Language Guidelines**:
-   - Use clear, simple Thai or English
-   - Avoid jargon unless necessary
-   - Use bullet points and headers
-   - Use emojis for visual clarity: 📊 ✅ ⚠️ 🎯 💡
+## Analysis
+[Insights based ONLY on patterns in the provided data]
+[NO comparisons to missing historical periods]
+[NO fabricated growth percentages]
 
-4. **Source Citations** (CRITICAL):
-   - Internal: "Source: [Document/CSV name]"
-   - External: "Source: [Outlet]" with URL if available
-   - Always cite data sources for numbers
+## Strategic Insights
+✅ Strengths: [Based on what data shows]
+🎯 Opportunities: [Logical next steps given current state]
+⚠️ Risks/Limitations: [Include data gaps and uncertainties]
 
-5. **Make it Actionable**:
-   - Every insight should have a "So what?" and "What next?"
-   - Provide specific, measurable recommendations
-   - Include timelines when relevant
+## Actionable Recommendations
+1. [Specific action based on actual data]
+2. [Specific action based on actual data]
 
-Context Information:
+## Data Limitations
+[Explicitly state what data is NOT available that would improve analysis]
+```
+
+**Language Guidelines**:
+- Use clear, simple Thai or English
+- Report exact numbers from source
+- Use bullet points and headers
+- Use emojis for clarity: 📊 ✅ ⚠️ 🎯 💡
+
+**Source Citations** (MANDATORY):
+- Every number MUST cite its source
+- Format: "Revenue: $2.6M (Source: company_sales_q1_2024.csv, Electronics category total)"
+- External data needs URL
+
+Context Information (USE ONLY THIS DATA):
 {context}
 
 Be professional, data-driven, and actionable. Executives should be able to make decisions based on your analysis.
@@ -118,13 +166,17 @@ Be professional, data-driven, and actionable. Executives should be able to make 
         
         human_template = """User Query: {query}
 
+REMINDER: Use ONLY the data from Context Information above. Do NOT fabricate comparisons or growth rates.
+
 Please provide a strategic analysis following the framework above:
-1. Executive Summary (key findings)
-2. Key Metrics (numbers first!)
-3. Detailed Analysis (evidence-based)
-4. Strategic Insights (SWOT if applicable)
-5. Actionable Recommendations (specific steps)
-6. Source Citations (for all claims)
+1. Executive Summary (key findings from PROVIDED DATA ONLY)
+2. Key Metrics (EXACT numbers from context - cite sources)
+3. Detailed Analysis (patterns in the PROVIDED data)
+4. Strategic Insights (based on ACTUAL data, not assumptions)
+5. Actionable Recommendations (realistic based on current data)
+6. Data Limitations (explicitly state what's missing for complete analysis)
+
+⚠️ CRITICAL: If you don't have historical data, DO NOT claim growth/decline percentages.
 
 Your response:"""
         
@@ -215,6 +267,10 @@ Your response:"""
             List of search results
         """
         try:
+            if self.search_tool is None:
+                logger.warning("External search requested but Tavily API key not configured")
+                return []
+            
             results = self.search_tool.invoke(query)
             logger.info(f"Retrieved {len(results)} external search results")
             return results

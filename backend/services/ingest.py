@@ -61,7 +61,7 @@ class DocumentProcessor:
         try:
             # Create empty FAISS index
             # We'll add documents later with add_documents()
-            from langchain.docstore.in_memory import InMemoryDocstore
+            from langchain_community.docstore.in_memory import InMemoryDocstore
             import faiss
             
             # Initialize with a dummy document to get the embedding dimension
@@ -200,28 +200,93 @@ class DocumentProcessor:
             raise
     
     def _create_csv_summary(self, df: pd.DataFrame, file_path: str) -> str:
-        """Create a text summary of CSV data for RAG indexing."""
+        """Create a comprehensive text summary of CSV data for RAG indexing with anti-hallucination safeguards."""
         summary_parts = [
             f"CSV File: {os.path.basename(file_path)}",
-            f"\nDataset Overview:",
+            f"\n{'='*80}",
+            f"DATASET OVERVIEW",
+            f"{'='*80}",
             f"- Total Rows: {df.shape[0]}",
             f"- Total Columns: {df.shape[1]}",
             f"- Columns: {', '.join(df.columns.tolist())}",
-            f"\nData Summary:"
         ]
         
-        # Add statistical summary
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        # Add date range if Date column exists
+        if 'Date' in df.columns or 'date' in df.columns:
+            date_col = 'Date' if 'Date' in df.columns else 'date'
+            try:
+                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                min_date = df[date_col].min()
+                max_date = df[date_col].max()
+                summary_parts.append(f"- Date Range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+                summary_parts.append(f"⚠️ NOTE: This dataset contains ONLY data for the period above. NO historical comparison data available.")
+            except:
+                pass
+        
+        # Get numeric columns
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+        
+        # Overall numeric statistics
         if len(numeric_cols) > 0:
-            summary_parts.append("\nNumeric Columns Statistics:")
+            summary_parts.append(f"\n{'='*80}")
+            summary_parts.append("OVERALL NUMERIC STATISTICS")
+            summary_parts.append(f"{'='*80}")
             for col in numeric_cols:
+                total = df[col].sum()
+                mean = df[col].mean()
+                min_val = df[col].min()
+                max_val = df[col].max()
                 summary_parts.append(
-                    f"- {col}: mean={df[col].mean():.2f}, "
-                    f"min={df[col].min():.2f}, max={df[col].max():.2f}"
+                    f"{col}:\n"
+                    f"  - Total: {total:,.2f}\n"
+                    f"  - Average: {mean:,.2f}\n"
+                    f"  - Min: {min_val:,.2f}\n"
+                    f"  - Max: {max_val:,.2f}"
                 )
         
-        # Add sample rows
-        summary_parts.append("\nSample Data (first 5 rows):")
+        # Detailed aggregations by categorical columns
+        for cat_col in categorical_cols:
+            if cat_col.lower() in ['category', 'region', 'product', 'type', 'segment']:
+                summary_parts.append(f"\n{'='*80}")
+                summary_parts.append(f"BREAKDOWN BY {cat_col.upper()}")
+                summary_parts.append(f"{'='*80}")
+                
+                grouped = df.groupby(cat_col)
+                for name, group in grouped:
+                    summary_parts.append(f"\n{cat_col}: {name}")
+                    summary_parts.append(f"  - Number of records: {len(group)}")
+                    
+                    for num_col in numeric_cols:
+                        total = group[num_col].sum()
+                        avg = group[num_col].mean()
+                        summary_parts.append(f"  - Total {num_col}: {total:,.2f}")
+                        summary_parts.append(f"  - Average {num_col}: {avg:,.2f}")
+        
+        # Top items by numeric columns
+        if 'Product' in df.columns or 'product' in df.columns:
+            prod_col = 'Product' if 'Product' in df.columns else 'product'
+            for num_col in numeric_cols:
+                summary_parts.append(f"\n{'='*80}")
+                summary_parts.append(f"TOP PRODUCTS BY {num_col.upper()}")
+                summary_parts.append(f"{'='*80}")
+                top_products = df.groupby(prod_col)[num_col].sum().sort_values(ascending=False)
+                for i, (prod, value) in enumerate(top_products.items(), 1):
+                    summary_parts.append(f"{i}. {prod}: {value:,.2f}")
+        
+        # Add warning about data limitations
+        summary_parts.append(f"\n{'='*80}")
+        summary_parts.append("⚠️ IMPORTANT DATA LIMITATIONS")
+        summary_parts.append(f"{'='*80}")
+        summary_parts.append("- This dataset represents a SNAPSHOT for the period shown above")
+        summary_parts.append("- NO historical comparison data (previous year, previous quarter) is available")
+        summary_parts.append("- Growth rates and trend comparisons CANNOT be calculated from this data alone")
+        summary_parts.append("- Any analysis should focus on current period performance and patterns")
+        
+        # Add sample rows for reference
+        summary_parts.append(f"\n{'='*80}")
+        summary_parts.append("SAMPLE DATA (First 5 rows for reference)")
+        summary_parts.append(f"{'='*80}")
         summary_parts.append(df.head().to_string())
         
         return "\n".join(summary_parts)

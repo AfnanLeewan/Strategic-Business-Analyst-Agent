@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://localhost:11434", env="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="llama3.1:8b", env="OLLAMA_MODEL")
     
-    # Tavily Search Configuration
-    tavily_api_key: str = Field(..., env="TAVILY_API_KEY")
+    # Tavily Search Configuration (optional - for external market intelligence)
+    tavily_api_key: Optional[str] = Field(default=None, env="TAVILY_API_KEY")
     
     # Application Configuration
     backend_host: str = Field(default="0.0.0.0", env="BACKEND_HOST")
