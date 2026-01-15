@@ -187,7 +187,68 @@ Your response:"""
     
     def classify_intent(self, query: str) -> QueryIntent:
         """
-        Classify the user's query intent.
+        Classify the user's query intent using LLM-based reasoning.
+        More accurate and context-aware than keyword matching.
+        
+        Args:
+            query: User query
+            
+        Returns:
+            QueryIntent enum value
+        """
+        try:
+            # Create classification prompt
+            classification_prompt = ChatPromptTemplate.from_messages([
+                ("system", """You are a query classifier for a Strategic Business Intelligence system.
+
+Classify queries as INTERNAL, EXTERNAL, or HYBRID:
+
+INTERNAL = Company-specific data (our revenue, our sales, our reports, company performance)
+EXTERNAL = Market/industry data (market trends, competitor analysis, industry news)
+HYBRID = Comparison queries (our performance vs market, benchmarking, competitive position)
+
+CRITICAL: You MUST respond with EXACTLY ONE WORD only - no explanation, no reasoning, no asterisks.
+Your response must be one of: INTERNAL, EXTERNAL, or HYBRID
+
+If the query mentions "our", "we", or "company" → INTERNAL
+If the query mentions "market", "competitors", "trends" alone → EXTERNAL
+If the query compares internal to external → HYBRID
+
+Output format: Just the word (INTERNAL, EXTERNAL, or HYBRID)"""),
+                ("human", "Query: {query}\n\nClassification:")
+            ])
+            
+            # Format and invoke LLM
+            messages = classification_prompt.format_messages(query=query)
+            response = self.llm.invoke(messages)
+            
+            # Parse response - handle both string (Ollama) and message object (ChatOpenAI)
+            if isinstance(response, str):
+                classification = response.strip().upper()
+            else:
+                classification = response.content.strip().upper()
+            
+            # Map to QueryIntent enum
+            if "HYBRID" in classification:
+                intent = QueryIntent.HYBRID
+            elif "EXTERNAL" in classification:
+                intent = QueryIntent.EXTERNAL
+            else:
+                # Default to INTERNAL for safety (prefer internal data)
+                intent = QueryIntent.INTERNAL
+            
+            logger.info(f"LLM classified query intent as: {intent.value} (raw: {classification})")
+            return intent
+            
+        except Exception as e:
+            # Fallback to keyword-based classification if LLM fails
+            logger.warning(f"LLM classification failed, falling back to keyword matching: {e}")
+            return self._classify_intent_fallback(query)
+    
+    def _classify_intent_fallback(self, query: str) -> QueryIntent:
+        """
+        Fallback keyword-based classification (backup method).
+        Used if LLM classification fails.
         
         Args:
             query: User query
@@ -199,11 +260,9 @@ Your response:"""
         
         # External indicators (English + Thai)
         external_keywords = [
-            # English
             "market", "trend", "competitor", "industry", "news",
             "current", "latest", "recent", "today", "external",
             "benchmark", "comparison", "sector",
-            # Thai
             "ตลาด", "แนวโน้ม", "คู่แข่ง", "อุตสาหกรรม", "ข่าว",
             "ปัจจุบัน", "ล่าสุด", "เมื่อเร็ว", "วันนี้", "ภายนอก",
             "เทียบ", "เปรียบเทียบ", "ภาคธุรกิจ"
@@ -211,11 +270,9 @@ Your response:"""
         
         # Internal indicators (English + Thai)
         internal_keywords = [
-            # English
             "our", "we", "company", "internal", "report",
             "revenue", "sales", "performance", "data", "analyze",
             "quarter", "annual", "financial",
-            # Thai
             "เรา", "บริษัท", "ภายใน", "รายงาน", "วิเคราะห์",
             "รายได้", "ยอดขาย", "ผลประกอบการ", "ข้อมูล",
             "ไตรมาส", "ประจำปี", "การเงิน", "จุดแข็ง", "จุดอ่อน"
@@ -224,7 +281,7 @@ Your response:"""
         has_external = any(keyword in query_lower for keyword in external_keywords)
         has_internal = any(keyword in query_lower for keyword in internal_keywords)
         
-        # Special logic: if query contains "ยอดขาย" or "sales" + "วิเคราะห์"/"analyze", it's INTERNAL
+        # Special rule for sales analysis
         if ("ยอดขาย" in query_lower or "sales" in query_lower) and ("วิเคราะห์" in query_lower or "analyze" in query_lower):
             intent = QueryIntent.INTERNAL
         elif has_external and has_internal:
@@ -234,7 +291,7 @@ Your response:"""
         else:
             intent = QueryIntent.INTERNAL
         
-        logger.info(f"Query intent classified as: {intent.value}")
+        logger.info(f"Fallback classification: {intent.value}")
         return intent
     
     def retrieve_internal_context(self, query: str, k: int = 10) -> List[Document]:

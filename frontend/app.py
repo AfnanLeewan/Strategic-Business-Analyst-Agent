@@ -346,7 +346,7 @@ with tab3:
             st.markdown("### 📄 Internal Documents")
             for idx, source in enumerate(internal_sources, 1):
                 st.markdown(f"""
-                <div class="source-card">
+                <div class="source-card" style="color: black;">
                     <strong>{idx}. {source['name']}</strong> (Page {source['page']})<br>
                     <small>{source['preview']}</small>
                 </div>
@@ -357,7 +357,7 @@ with tab3:
             st.markdown("### 🌐 External Sources")
             for idx, source in enumerate(external_sources, 1):
                 st.markdown(f"""
-                <div class="source-card">
+                <div class="source-card" style="color: black;">
                     <strong>{idx}. {source['name']}</strong><br>
                     <a href="{source['url']}" target="_blank">{source['url']}</a><br>
                     <small>{source['preview']}</small>
